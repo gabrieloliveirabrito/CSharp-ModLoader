@@ -77,7 +77,7 @@ namespace ModLoader
                     return false;
                 }
 
-                if (Configuration.Debug)
+                if (Configuration.Debug.Inject)
                 {
                     if (prefix != null && postfix != null)
                         Log.InfoFormat("Injecting prefix {0} and postfix {1} to target {2}", GetClassMethodName(prefix), GetClassMethodName(postfix), GetClassMethodName(original));
@@ -107,7 +107,7 @@ namespace ModLoader
             else if (timers.ContainsKey(id))
                 throw new Exception("The timer already exists!");
 
-            if (Configuration.Debug)
+            if (Configuration.Debug.Timer)
                 log.InfoFormat("Creating Timer {0} for mod {1}", id, ModData.Name);
 
             var timer = new Timer(new TimerCallback(s => TimerCallback(callBack, s)), state, interval, interval);

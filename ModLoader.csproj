@@ -49,8 +49,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyLoader.cs" />
     <Compile Include="Data\AssemblyData.cs" />
+    <Compile Include="Data\DebugConfig.cs" />
     <Compile Include="Data\ModData.cs" />
     <Compile Include="Data\ModLoaderConfig.cs" />
     <Compile Include="Enums\ModType.cs" />

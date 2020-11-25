@@ -57,7 +57,7 @@ namespace ModLoader
                 if (!InitPartial("ModLoader Configuration", LoadConfig))
                     return false;
 
-                compilerParameters.IncludeDebugInformation = configuration.Debug;
+                compilerParameters.IncludeDebugInformation = configuration.Debug.Compilation;
                 compilerParameters.ReferencedAssemblies.AddRange(assemblies.ToArray());
                 //Harmony.DEBUG = configuration.Debug;
 
@@ -70,7 +70,7 @@ namespace ModLoader
                 }
                 else if (modsDirectory == null)
                     Path.Combine(Environment.CurrentDirectory, "Mods");
-                else if (configuration.Debug)
+                else if (configuration.Debug.Init)
                     log.InfoFormat("Loading mods from: {0}", modsDirectory);
 
                 if (!Directory.Exists(modsDirectory))
@@ -114,7 +114,7 @@ namespace ModLoader
                         {
                             if (!LoadFromCache(modPath, data, ref assemblyData))
                             {
-                                if (configuration.Debug)
+                                if (configuration.Debug.Cache)
                                     log.InfoFormat("Cache of mod {0} not for or mod updated, compiling scripts..", data.ID);
 
                                 if (!CompileScript(modDirectory, data, ref assemblyData))
@@ -123,14 +123,14 @@ namespace ModLoader
                                     return false;
                                 }
                             }
-                            else if (configuration.Debug)
+                            else if (configuration.Debug.Cache)
                             {
                                 log.InfoFormat("Loading mod {0} from cache..", data.ID);
                             }
                         }
                         else if (data.Type == ModType.DLL)
                         {
-                            if (configuration.Debug)
+                            if (configuration.Debug.Cache)
                                 log.InfoFormat("Loading mod {0} from compiled assembly..", data.ID);
                             assemblyData = File.ReadAllBytes(modPath);
                         }
@@ -314,8 +314,11 @@ namespace ModLoader
                 {
                     if (error.IsWarning)
                     {
-                        log.WarnFormat("{0}:{1} Column {2}", error.FileName, error.Line, error.Column);
-                        log.WarnFormat("Error {0}: {1}", error.ErrorNumber, error.ErrorText);
+                        if (configuration.Debug.Compilation)
+                        {
+                            log.WarnFormat("{0}:{1} Column {2}", error.FileName, error.Line, error.Column);
+                            log.WarnFormat("Error {0}: {1}", error.ErrorNumber, error.ErrorText);
+                        }
                         warningCount++;
                     }
                     else
