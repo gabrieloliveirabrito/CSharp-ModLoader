@@ -54,26 +54,26 @@ namespace ModLoader
         {
             try
             {
-                if(original == null)
+                if (original == null)
                 {
-                    Log.Error("Nenhum método para realizar o patch foi informado!");
+                    Log.Error("No method to patch has found!");
                     return false;
                 }
-                if(prefix == null && postfix == null)
+                if (prefix == null && postfix == null)
                 {
-                    Log.Error("Nenhum método prefixo ou sufixo foi informado!");
+                    Log.Error("No prefix or suffix method is informed or found!");
                     return false;
                 }
 
                 if (prefix != null && !prefix.IsStatic)
                 {
-                    Log.Error("O patch de prefixo não é um método estático!");
+                    Log.Error("The prefix method is not static!");
                     return false;
                 }
 
                 if (postfix != null && !postfix.IsStatic)
                 {
-                    Log.Error("O patch de sufixo não é um método estático!");
+                    Log.Error("The postfix method is not static!");
                     return false;
                 }
 
@@ -217,6 +217,47 @@ namespace ModLoader
         public static Type[] Types<T1, T2, T3, T4, T5>()
         {
             return new[] { typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5) };
+        }
+
+        public static Type[] Types<T1, T2, T3, T4, T5, T6>()
+        {
+            return new[]
+            {
+                typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6)
+            };
+        }
+
+        public static Type[] Types<T1, T2, T3, T4, T5, T6, T7>()
+        {
+            return new[]
+            {
+                typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5),
+                typeof(T6), typeof(T7)
+            };
+        }
+
+        public static Type[] Types<T1, T2, T3, T4, T5, T6, T7, T8>()
+        {
+            return new[] {
+                typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5),
+                typeof(T6), typeof(T7), typeof(T8)
+            };
+        }
+
+        public static Type[] Types<T1, T2, T3, T4, T5, T6, T7, T8, T9>()
+        {
+            return new[] {
+              typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5),
+                typeof(T6), typeof(T7), typeof(T8), typeof(T9)
+            };
+        }
+
+        public static Type[] Types<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>()
+        {
+            return new[] {
+                typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5),
+                typeof(T6), typeof(T7), typeof(T8), typeof(T9), typeof(T10),
+            };
         }
         #endregion
     }

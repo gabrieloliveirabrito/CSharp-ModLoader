@@ -8,18 +8,12 @@ namespace ModLoader.Data
 {
     public class AssemblyData
     {
-        public string Local { get; set; }
-        public string System { get; set; }
+        public List<string> Local { get; set; }
+        public List<string> System { get; set; }
 
-        public bool GetFullPath(ref string fullPath)
+        public bool GetFullPath(string name, ref string fullPath)
         {
-            if (System != null)
-            {
-                fullPath = System;
-                return true;
-            }
-
-            fullPath = Path.Combine(Environment.CurrentDirectory, Local);
+            fullPath = Path.Combine(Environment.CurrentDirectory, name);
             return File.Exists(fullPath);
         }
     }

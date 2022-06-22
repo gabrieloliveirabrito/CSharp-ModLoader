@@ -9,7 +9,8 @@ namespace ModLoader.Data
     {
         public DebugConfig Debug { get; set; }
         public bool UseCache { get; set; }
+        public string Compiler { get; set; }
         public string ModsDirectory { get; set; }
-        public List<AssemblyData> Assemblies = new List<AssemblyData>();
+        public AssemblyData Assemblies = new AssemblyData();
     }
 }

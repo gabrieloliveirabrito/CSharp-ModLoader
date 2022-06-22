@@ -1,38 +1,58 @@
 ﻿using System;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
-using System.Xml;
-using log4net;
-using System.Xml.Linq;
+using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using Microsoft.CSharp;
+using log4net;
 using Newtonsoft.Json;
 using HarmonyLib;
+
 
 namespace ModLoader
 {
     using Data;
     using Enums;
-    using Microsoft.CSharp;
-    using System.CodeDom.Compiler;
-    using System.Security.Cryptography;
+    using Compilers;
 
     public class ModLoader
     {
         private static ILog log = null;
         private static ModLoaderConfig configuration = null;
         private static List<string> assemblies = null;
+        private static Dictionary<string, CompilerBase> compilers = new Dictionary<string, CompilerBase>();
         private static Dictionary<string, ModData> modDatas = null;
         private static Dictionary<string, ModBase> mods = null;
-        private static CodeDomProvider csharpProvider; //TODO: VB.Net provider
-        private static Dictionary<string, string> providerOptions = null;
-        private static CompilerParameters compilerParameters = null;
+        private static CompilerBase compiler = null;
         private static string modsCacheDirectory = null;
         private static int warningCount = 0;
 
         public static bool Loaded { get; private set; }
         public static bool AllowTimers { get; set; } = true;
+
+        public static bool RegisterCompiler<TCompiler>(string name)
+            where TCompiler : CompilerBase
+        {
+            if (compilers.ContainsKey(name))
+                return false;
+
+            var compiler = Activator.CreateInstance<TCompiler>();
+            if (compiler == null)
+                return false;
+
+            compilers[name] = compiler;
+            return true;
+        }
+
+        private static bool FetchCompiler()
+        {
+            return compilers.TryGetValue(configuration.Compiler, out compiler);
+        }
 
         public static bool Init()
         {
@@ -41,24 +61,21 @@ namespace ModLoader
             {
                 //Init variables
                 log = LogManager.GetLogger("ModLoader");
-                assemblies = new List<string>();
+                compilers = new Dictionary<string, CompilerBase>();
                 modDatas = new Dictionary<string, ModData>();
                 mods = new Dictionary<string, ModBase>();
-                providerOptions = new Dictionary<string, string>();
-                compilerParameters = new CompilerParameters();
-                csharpProvider = CodeDomProvider.CreateProvider("CSharp");
+                assemblies = new List<string>();
 
-                //Setup variables
-                providerOptions.Add("CompilerVersion", "v4.0");
-                compilerParameters.GenerateInMemory = false;
-                compilerParameters.GenerateExecutable = false;
-                compilerParameters.ReferencedAssemblies.Add(typeof(ModLoader).Assembly.Location);
+                RegisterCompiler<LegacyCompiler>("Legacy");
+                RegisterCompiler<RoslynCompiler>("Roslyn");
 
                 if (!InitPartial("ModLoader Configuration", LoadConfig))
                     return false;
-
-                compilerParameters.IncludeDebugInformation = configuration.Debug.Compilation;
-                compilerParameters.ReferencedAssemblies.AddRange(assemblies.ToArray());
+                else if (!InitPartial("Compiler Set", FetchCompiler))
+                    return false;
+                else if (!InitPartial("ModLoader Compiler", () => compiler.Init(configuration, assemblies)))
+                    return false;
+                
                 //Harmony.DEBUG = configuration.Debug;
 
                 string modsDirectory = configuration.ModsDirectory;
@@ -69,8 +86,10 @@ namespace ModLoader
                     modsDirectory = Path.Combine(Environment.CurrentDirectory, "Mods");
                 }
                 else if (modsDirectory == null)
-                    Path.Combine(Environment.CurrentDirectory, "Mods");
-                else if (configuration.Debug.Init)
+                    modsDirectory = Path.Combine(Environment.CurrentDirectory, "Mods");
+
+                modsDirectory = Path.GetFullPath(modsDirectory);
+                if (configuration.Debug.Init)
                     log.InfoFormat("Loading mods from: {0}", modsDirectory);
 
                 if (!Directory.Exists(modsDirectory))
@@ -89,7 +108,7 @@ namespace ModLoader
                 }
 
                 warningCount = 0;
-                foreach (string modDirectory in Directory.GetDirectories(modsDirectory, "*.*", SearchOption.TopDirectoryOnly))
+                foreach (string modDirectory in Directory.GetDirectories(modsDirectory, "*.*", SearchOption.AllDirectories))
                 {
                     string dataPath = Path.Combine(modDirectory, "mod.json");
 
@@ -115,7 +134,7 @@ namespace ModLoader
                             if (!LoadFromCache(modPath, data, ref assemblyData))
                             {
                                 if (configuration.Debug.Cache)
-                                    log.InfoFormat("Cache of mod {0} not for or mod updated, compiling scripts..", data.ID);
+                                    log.InfoFormat("Cache of mod {0} not exists or mod updated, compiling scripts..", data.ID);
 
                                 if (!CompileScript(modDirectory, data, ref assemblyData))
                                 {
@@ -136,9 +155,14 @@ namespace ModLoader
                         }
 
                         Assembly modAssembly = AppDomain.CurrentDomain.Load(assemblyData);
+                        Type mainType = modAssembly.GetTypes().FirstOrDefault(t => t.Name == data.MainClass);
 
-                        Type mainType = modAssembly.GetType(data.MainClass);
-                        if (mainType.BaseType != typeof(ModBase))
+                        if(mainType == null)
+                        {
+                            log.ErrorFormat("Mod {0} MainClass {1} don't exists!", data.Name, data.MainClass);
+                            return false;
+                        }
+                        else if (mainType.BaseType != typeof(ModBase))
                         {
                             log.ErrorFormat("Mod {0} MainClass {1} not extends from type ModBase!", data.Name, data.MainClass);
                             return false;
@@ -227,21 +251,52 @@ namespace ModLoader
             return result;
         }
 
+        private static void CreateConfig(string path)
+        {
+            try
+            {
+                var config = new ModLoaderConfig();
+                config.UseCache = false;
+                config.Debug = new DebugConfig() { "None" };
+                config.ModsDirectory = "./mods/";
+                config.Assemblies = new AssemblyData();
+
+                config.Assemblies.System.AddRange(new[] { "System.dll", "System.Linq.dll", "System.Configuration.dll" });
+                config.Assemblies.Local.AddRange(new[] { "0Harmony.dll", "Newtonsoft.Json.dll", "log4net.dll" });
+
+                var json = JsonConvert.SerializeObject(config);
+                if (File.Exists(path)) File.Delete(path);
+
+                using (var writer = File.CreateText(path))
+                    writer.Write(json);
+            }
+            catch(Exception ex)
+            {
+                log.Error(ex);
+            }
+        }
+
         private static bool LoadConfig()
         {
             try
             {
                 string configPath = Path.Combine(Environment.CurrentDirectory, "modloader.json");
+                if(!File.Exists(configPath))
+                {
+                    CreateConfig(configPath);
+                    return false;
+                }
 
                 string jsonData = File.ReadAllText(configPath);
                 configuration = JsonConvert.DeserializeObject<ModLoaderConfig>(jsonData);
 
-                foreach (AssemblyData assemblyData in configuration.Assemblies)
+                assemblies.AddRange(configuration.Assemblies.System);
+                foreach (string name in configuration.Assemblies.Local)
                 {
                     string assemblyPath = "";
-                    if (!assemblyData.GetFullPath(ref assemblyPath))
+                    if (!configuration.Assemblies.GetFullPath(name, ref assemblyPath))
                     {
-                        log.ErrorFormat("Failed to load assembly {0}!", assemblyData.System ?? assemblyData.Local);
+                        log.ErrorFormat("Failed to load assembly {0}!", name);
                         return false;
                     }
 
@@ -302,39 +357,7 @@ namespace ModLoader
 
         private static bool CompileScript(string modPath, ModData data, ref byte[] modAssemblyData)
         {
-            string[] files = Directory.GetFiles(modPath, "*.cs", SearchOption.AllDirectories);
-
-            compilerParameters.OutputAssembly = Path.Combine(modsCacheDirectory, data.ID, $"{data.ID}.dll");
-            CompilerResults result = csharpProvider.CompileAssemblyFromFile(compilerParameters, files);
-
-            int errorCount = 0;
-            if (result.Errors.HasErrors)
-            {
-                foreach (CompilerError error in result.Errors)
-                {
-                    if (error.IsWarning)
-                    {
-                        if (configuration.Debug.Compilation)
-                        {
-                            log.WarnFormat("{0}:{1} Column {2}", error.FileName, error.Line, error.Column);
-                            log.WarnFormat("Error {0}: {1}", error.ErrorNumber, error.ErrorText);
-                        }
-                        warningCount++;
-                    }
-                    else
-                    {
-                        log.ErrorFormat("{0}:{1} Column {2}", error.FileName, error.Line, error.Column);
-                        log.ErrorFormat("Error {0}: {1}", error.ErrorNumber, error.ErrorText);
-                        errorCount++;
-                    }
-                }
-
-                if (errorCount > 0)
-                    return false;
-            }
-
-            modAssemblyData = File.ReadAllBytes(compilerParameters.OutputAssembly);
-            return true;
+           return compiler.Compile(modPath, modsCacheDirectory, data, ref modAssemblyData);
         }
     }
 }
